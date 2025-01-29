@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Table Orders</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <h1 id="table-title">Information for Table</h1>
+    <table id="orders-table">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Item</th>
+                <th>Price</th>
+                <th>Amount</th>
+                <th>Actions</th>
+                <th>Time</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- Orders will be dynamically inserted here -->
+        </tbody>
+    </table>
+    <button id="record-button">Start Recording</button>
+    <div id="transcription"></div>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const tableNumber = urlParams.get('number');
+            document.getElementById('table-title').textContent = `Information for Table ${tableNumber}`;
+
+            // Fetch orders from the server
+            fetch(`/orders?tableNumber=${tableNumber}`)
+                .then(response => response.json())
+                .then(data => {
+                    const ordersTableBody = document.querySelector('#orders-table tbody');
+                    ordersTableBody.innerHTML = ''; // Clear existing rows
+                    data.orders.forEach(order => {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>${order.id}</td>
+                            <td>${order.item || 'N/A'}</td>
+                            <td>${order.price}</td>
+                            <td>
+                                <button class="decrement">-</button>
+                                <span class="amount">${order.amount}</span>
+                                <button class="increment">+</button>
+                            </td>
+                            <td>
+                                <button class="edit-amount">Edit</button>
+                            </td>
+                            <td>${order.time}</td>
+                        `;
+                        ordersTableBody.appendChild(row);
+                    });
+
+                    // Add event listeners for increment and decrement buttons
+                    ordersTableBody.querySelectorAll('.increment').forEach(button => {
+                        button.addEventListener('click', event => {
+                            const amountSpan = event.target.previousElementSibling;
+                            let amount = parseInt(amountSpan.textContent);
+                            amountSpan.textContent = ++amount;
+                        });
+                    });
+
+                    ordersTableBody.querySelectorAll('.decrement').forEach(button => {
+                        button.addEventListener('click', event => {
+                            const amountSpan = event.target.nextElementSibling;
+                            let amount = parseInt(amountSpan.textContent);
+                            if (amount > 0) {
+                                amountSpan.textContent = --amount;
+                            }
+                        });
+                    });
+
+                    // Add event listeners for edit amount buttons
+                    ordersTableBody.querySelectorAll('.edit-amount').forEach(button => {
+                        button.addEventListener('click', event => {
+                            const amountSpan = event.target.parentElement.previousElementSibling.querySelector('.amount');
+                            const newAmount = prompt('Enter new amount:', amountSpan.textContent);
+                            if (newAmount !== null && !isNaN(newAmount) && newAmount >= 0) {
+                                amountSpan.textContent = newAmount;
+                            }
+                        });
+                    });
+                })
+                .catch(error => console.error('Error fetching orders:', error));
+
+            const recordButton = document.getElementById('record-button');
+            let mediaRecorder;
+            let audioChunks = [];
+
+            recordButton.addEventListener('click', () => {
+                if (recordButton.textContent === 'Start Recording') {
+                    navigator.mediaDevices.getUserMedia({ audio: true })
+                        .then(stream => {
+                            mediaRecorder = new MediaRecorder(stream);
+                            mediaRecorder.start();
+                            recordButton.textContent = 'Stop Recording';
+
+                            mediaRecorder.addEventListener('dataavailable', event => {
+                                audioChunks.push(event.data);
+                            });
+
+                            mediaRecorder.addEventListener('stop', () => {
+                                const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                                const formData = new FormData();
+                                formData.append('audio', audioBlob);
+                                formData.append('tableNumber', tableNumber); // Include table number
+
+                                fetch('/transcribe', {
+                                    method: 'POST',
+                                    body: formData
+                                })
+                                .then(response => response.json())
+                                .then(data => {
+                                    document.getElementById('transcription').textContent = data.transcription;
+                                    const ordersTableBody = document.querySelector('#orders-table tbody');
+                                    ordersTableBody.innerHTML = ''; // Clear existing rows
+                                    data.orders.forEach(order => {
+                                        const row = document.createElement('tr');
+                                        row.innerHTML = `
+                                            <td>${order.id}</td>
+                                            <td>${order.item || 'N/A'}</td>
+                                            <td>${order.price}</td>
+                                            <td>
+                                                <button class="decrement">-</button>
+                                                <span class="amount">${order.amount}</span>
+                                                <button class="increment">+</button>
+                                            </td>
+                                            <td>
+                                                <button class="edit-amount">Edit</button>
+                                            </td>
+                                            <td>${order.time}</td>
+                                        `;
+                                        ordersTableBody.appendChild(row);
+                                    });
+
+                                    // Add event listeners for increment and decrement buttons
+                                    ordersTableBody.querySelectorAll('.increment').forEach(button => {
+                                        button.addEventListener('click', event => {
+                                            const amountSpan = event.target.previousElementSibling;
+                                            let amount = parseInt(amountSpan.textContent);
+                                            amountSpan.textContent = ++amount;
+                                        });
+                                    });
+
+                                    ordersTableBody.querySelectorAll('.decrement').forEach(button => {
+                                        button.addEventListener('click', event => {
+                                            const amountSpan = event.target.nextElementSibling;
+                                            let amount = parseInt(amountSpan.textContent);
+                                            if (amount > 0) {
+                                                amountSpan.textContent = --amount;
+                                            }
+                                        });
+                                    });
+
+                                    // Add event listeners for edit amount buttons
+                                    ordersTableBody.querySelectorAll('.edit-amount').forEach(button => {
+                                        button.addEventListener('click', event => {
+                                            const amountSpan = event.target.parentElement.previousElementSibling.querySelector('.amount');
+                                            const newAmount = prompt('Enter new amount:', amountSpan.textContent);
+                                            if (newAmount !== null && !isNaN(newAmount) && newAmount >= 0) {
+                                                amountSpan.textContent = newAmount;
+                                            }
+                                        });
+                                    });
+                                })
+                                .catch(error => console.error('Error transcribing audio:', error));
+                            });
+                        })
+                        .catch(error => console.error('Error accessing microphone:', error));
+                } else {
+                    mediaRecorder.stop();
+                    recordButton.textContent = 'Start Recording';
+                }
+            });
+        });
+    </script>
+</body>
+</html>
